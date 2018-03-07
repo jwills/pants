@@ -56,6 +56,9 @@ class ProtobufGen(SimpleCodegenTask):
              help='Prepend this path onto PATH in the environment before executing protoc. '
                   'Intended to help protoc find its plugins.',
              default=None)
+    register('--extra_path_is_platform_dependent', advanced=True, type=bool,
+             help='If true, make the extra_path argument platform-dependent to handle plugins '
+                  'that are compiled for different platforms.')
     register('--supportdir', advanced=True,
              removal_version='1.7.0.dev0', removal_hint='Will no longer be configurable.',
              help='Path to use for the protoc binary.  Used as part of the path to lookup the'
@@ -83,6 +86,7 @@ class ProtobufGen(SimpleCodegenTask):
     super(ProtobufGen, self).__init__(*args, **kwargs)
     self.plugins = self.get_options().protoc_plugins or []
     self._extra_paths = self.get_options().extra_path or []
+    self._extra_path_is_platform_dependent = self.get_options().extra_path_is_platform_dependent or False
 
   @property
   def protobuf_binary(self):
@@ -91,6 +95,11 @@ class ProtobufGen(SimpleCodegenTask):
   @property
   def javadeps(self):
     return self.resolve_deps(self.get_options().javadeps or [])
+
+  @property
+  def extra_paths(self):
+    # TODO something here involving subsystems, somehow
+    return self._extra_paths
 
   def synthetic_target_type(self, target):
     return JavaLibrary
@@ -141,8 +150,8 @@ class ProtobufGen(SimpleCodegenTask):
 
     # Tack on extra path entries. These can be used to find protoc plugins
     protoc_environ = os.environ.copy()
-    if self._extra_paths:
-      protoc_environ['PATH'] = os.pathsep.join(self._extra_paths
+    if self.extra_paths():
+      protoc_environ['PATH'] = os.pathsep.join(self.extra_paths()
                                                + protoc_environ['PATH'].split(os.pathsep))
 
     # Note: The test_source_ordering integration test scrapes this output, so modify it with care.
